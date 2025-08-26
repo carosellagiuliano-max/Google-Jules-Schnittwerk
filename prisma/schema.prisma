@@ -1,0 +1,122 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Tenant {
+  id        String   @id @default(cuid())
+  name      String
+  domain    String   @unique
+  plan      String   @default("basic")
+  themeJson Json?
+  createdAt DateTime @default(now())
+  profiles  Profile[] // Changed from users User[]
+  services  Service[]
+  staff     Staff[]
+  bookings  Booking[]
+  bans      CustomerBan[]
+  schedules StaffSchedule[]
+  timeOffs  StaffTimeOff[]
+}
+
+// Renamed from User to Profile
+model Profile {
+  id        String   @id // This is the UUID from Supabase auth.users
+  email     String
+  role      String   // 'customer' | 'staff' | 'owner' | 'admin'
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  fullName  String?
+  phone     String?
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, email])
+  @@index([tenantId, role])
+}
+
+model Service {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  name      String
+  duration  Int
+  price     Int
+  active    Boolean  @default(true)
+  bookings  Booking[]
+
+  @@unique([tenantId, name])
+}
+
+model Staff {
+  id        String          @id @default(cuid())
+  tenantId  String
+  tenant    Tenant          @relation(fields: [tenantId], references: [id])
+  name      String
+  active    Boolean         @default(true)
+  schedules StaffSchedule[]
+  timeOffs  StaffTimeOff[]
+  bookings  Booking[]
+
+  @@unique([tenantId, name])
+}
+
+model StaffSchedule {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id])
+  weekday   Int      // 0-6 (So-Sa)
+  startMin  Int      // Minuten ab 00:00
+  endMin    Int
+
+  @@unique([tenantId, staffId, weekday])
+}
+
+model StaffTimeOff {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  staffId   String
+  staff     Staff    @relation(fields: [staffId], references: [id])
+  start     DateTime
+  end       DateTime
+  reason    String?
+}
+
+model Booking {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  serviceId    String
+  service      Service  @relation(fields: [serviceId], references: [id])
+  staffId      String
+  staff        Staff    @relation(fields: [staffId], references: [id])
+  customerId   String? // This could link to a Profile with role 'customer'
+  start        DateTime
+  end          DateTime
+  status       String   // 'PENDING' | 'CONFIRMED' | 'CANCELLED'
+  customerName String
+  email        String?
+  phone        String?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, staffId, start])
+  @@index([start])
+  @@index([end])
+}
+
+model CustomerBan {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  email     String
+  reason    String?
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, email], name: "ban_by_tenant_email")
+}
