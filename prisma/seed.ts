@@ -1,64 +1,96 @@
 import { PrismaClient } from '@prisma/client';
-import { hash } from 'bcrypt';
 
 const prisma = new PrismaClient();
+
+// Define static UUIDs for demo users for consistency.
+const DEMO_OWNER_ID = '00000000-0000-0000-0000-000000000001';
+const DEMO_CUSTOMER_ID = '00000000-0000-0000-0000-000000000002';
 
 async function main() {
   console.log('Start seeding ...');
 
-  // Create demo tenant
-  const tenant = await prisma.tenant.create({
-    data: {
+  // Use upsert for idempotency. This allows the seed script to be run multiple times
+  // without creating duplicate data.
+  const tenant = await prisma.tenant.upsert({
+    where: { domain: 'demo.deine-domain.ch' },
+    update: {},
+    create: {
       name: 'Demo Salon',
       domain: 'demo.deine-domain.ch',
       plan: 'premium',
     },
   });
-  console.log(`Created tenant ${tenant.name} with id: ${tenant.id}`);
+  console.log(`Upserted tenant ${tenant.name} with id: ${tenant.id}`);
 
-  // Create an owner for the demo tenant
-  // In a real app, the password should not be hardcoded.
-  // This user will also need to be created in Supabase Auth.
-  const owner = await prisma.user.create({
-    data: {
+  // Create an owner for the demo tenant.
+  // In a real app, this profile would be created by a webhook after a user signs up via Supabase.
+  // The ID would come from the Supabase auth.users table.
+  const owner = await prisma.profile.upsert({
+    where: { id: DEMO_OWNER_ID },
+    update: {},
+    create: {
+      id: DEMO_OWNER_ID,
       email: 'owner@demo.deine-domain.ch',
       role: 'owner',
       tenantId: tenant.id,
       fullName: 'Demo Owner',
-      // NOTE: Real applications should not store raw passwords.
-      // This is a placeholder. Supabase handles auth, so this hash might not be used.
-      hash: await hash('password123', 10),
+      phone: '123-456-7890',
     },
   });
-  console.log(`Created owner ${owner.fullName} for tenant ${tenant.name}`);
+  console.log(`Upserted owner ${owner.fullName} for tenant ${tenant.name}`);
+  console.log(`-> Test credentials: email=${owner.email}, password=password123 (set during Supabase signup)`);
+
+  // Create a customer for the demo tenant.
+  const customer = await prisma.profile.upsert({
+      where: { id: DEMO_CUSTOMER_ID },
+      update: {},
+      create: {
+        id: DEMO_CUSTOMER_ID,
+        email: 'customer@demo.deine-domain.ch',
+        role: 'customer',
+        tenantId: tenant.id,
+        fullName: 'Demo Customer',
+        phone: '098-765-4321',
+      },
+    });
+  console.log(`Upserted customer ${customer.fullName} for tenant ${tenant.name}`);
+  console.log(`-> Test credentials: email=${customer.email}, password=password123 (set during Supabase signup)`);
 
   // Create a staff member
-  const staff = await prisma.staff.create({
-    data: {
+  const staff = await prisma.staff.upsert({
+    where: { tenantId_name: { tenantId: tenant.id, name: 'Jane Doe' } }, // Requires @@unique([tenantId, name]) on Staff
+    update: {},
+    create: {
         tenantId: tenant.id,
         name: 'Jane Doe',
         active: true,
-    }
+    },
   });
-  console.log(`Created staff member ${staff.name}`);
+  console.log(`Upserted staff member ${staff.name}`);
 
   // Create a service
-  const service = await prisma.service.create({
-    data: {
+  const service = await prisma.service.upsert({
+    where: { tenantId_name: { tenantId: tenant.id, name: 'Haircut' } }, // Requires @@unique([tenantId, name]) on Service
+    update: {},
+    create: {
         tenantId: tenant.id,
         name: 'Haircut',
         duration: 30,
         price: 50,
         active: true,
-    }
+    },
   });
-  console.log(`Created service ${service.name}`);
+  console.log(`Upserted service ${service.name}`);
 
   // Create a schedule for the staff member
-  // Monday to Friday, 9am to 5pm
   for (let i = 1; i <= 5; i++) {
-    await prisma.staffSchedule.create({
-        data: {
+    await prisma.staffSchedule.upsert({
+        where: { tenantId_staffId_weekday: { tenantId: tenant.id, staffId: staff.id, weekday: i } }, // Requires @@unique([tenantId, staffId, weekday])
+        update: {
+            startMin: 9 * 60,
+            endMin: 17 * 60,
+        },
+        create: {
             tenantId: tenant.id,
             staffId: staff.id,
             weekday: i,
@@ -67,7 +99,7 @@ async function main() {
         }
     });
   }
-  console.log(`Created schedule for ${staff.name}`);
+  console.log(`Upserted schedule for ${staff.name}`);
 
 
   console.log('Seeding finished.');

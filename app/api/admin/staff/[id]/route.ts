@@ -9,7 +9,7 @@ const staffUpdateSchema = z.object({
 });
 
 // GET a single staff member by ID
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: { id:string } }) {
   try {
     const { tenant } = await requireRole(['owner', 'admin']);
     const prisma = getTenantScopedPrismaClient(tenant.id);

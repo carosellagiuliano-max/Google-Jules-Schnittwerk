@@ -24,7 +24,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
     return NextResponse.json(service);
   } catch (error: any) {
-    // Handle auth errors, etc.
+    console.error(`Error fetching service ${params.id} (admin):`, error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
@@ -49,7 +49,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
         return NextResponse.json(updatedService);
     } catch (error: any) {
-        // Handle auth, not found, etc.
+        console.error(`Error updating service ${params.id} (admin):`, error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
@@ -67,7 +67,7 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
         return new NextResponse(null, { status: 204 }); // No Content
     } catch (error: any) {
-        // Handle auth, not found, etc.
+        console.error(`Error deleting service ${params.id} (admin):`, error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

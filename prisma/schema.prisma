@@ -47,6 +47,8 @@ model Service {
   price     Int
   active    Boolean  @default(true)
   bookings  Booking[]
+
+  @@unique([tenantId, name])
 }
 
 model Staff {
@@ -58,6 +60,8 @@ model Staff {
   schedules StaffSchedule[]
   timeOffs  StaffTimeOff[]
   bookings  Booking[]
+
+  @@unique([tenantId, name])
 }
 
 model StaffSchedule {
@@ -69,6 +73,8 @@ model StaffSchedule {
   weekday   Int      // 0-6 (So-Sa)
   startMin  Int      // Minuten ab 00:00
   endMin    Int
+
+  @@unique([tenantId, staffId, weekday])
 }
 
 model StaffTimeOff {
