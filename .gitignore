@@ -15,25 +15,6 @@ yarn-error.log*
 *.swo
 *~
 
-# Backend specific
-backend/__pycache__/
-backend/*.pyc
-backend/*.pyo
-backend/*.pyd
-backend/.Python
-backend/env/
-backend/venv/
-backend/.venv/
-backend/pip-log.txt
-backend/pip-delete-this-directory.txt
-backend/.tox/
-backend/.coverage
-backend/.pytest_cache/
-backend/htmlcov/
-backend/.cache/
-backend/nosetests.xml
-backend/coverage.xml
-backend/*.cover
-backend/.hypothesis/
-backend/.pytest_cache/
-backend/salon.db
+# Next.js
+.next/
+out/

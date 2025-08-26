@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint code
+        run: npm run lint
+
+      - name: Build project
+        run: npm run build
+        env:
+          # We don't need a real database for the build step,
+          # but Prisma requires the env var to be present.
+          DATABASE_URL: "postgresql://user:password@host:port/db"
+          # Supabase keys are public and can be dummy values for build.
+          NEXT_PUBLIC_SUPABASE_URL: "http://localhost"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "dummy-key"
+
+      # - name: Run tests
+      #   run: npm test
+      #   # Add this step once tests are implemented.
