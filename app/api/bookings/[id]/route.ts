@@ -1,21 +1,21 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getTenantScopedPrismaClient } from '@/lib/rls';
 import { requireRole } from '@/lib/auth';
 import { subHours, isBefore } from 'date-fns';
 
 export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
+  req: Request,
+  context: { params: { id: string } }
 ) {
   try {
     const tenantId = req.headers.get('x-tenant-id');
     if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant ID is missing' }, { status: 400 });
+      return new Response(JSON.stringify({ error: 'Tenant ID is missing' }), { status: 400 });
     }
 
-    const bookingId = params.id;
+    const bookingId = context.params.id;
     if (!bookingId) {
-      return NextResponse.json({ error: 'Booking ID is missing' }, { status: 400 });
+      return new Response(JSON.stringify({ error: 'Booking ID is missing' }), { status: 400 });
     }
 
     // 1. Authenticate user
@@ -41,7 +41,7 @@ export async function DELETE(
 
       // c. Check 24-hour cancellation policy
       const cancellationDeadline = subHours(booking.start, 24);
-      if (isBefore(new Date(), cancellationDeadline) === false) {
+      if (!isBefore(new Date(), cancellationDeadline)) {
         throw new Error('Cancellation period has passed. Cannot cancel within 24 hours of appointment.');
       }
 
@@ -52,22 +52,25 @@ export async function DELETE(
       });
     });
 
-    return NextResponse.json(cancelledBooking);
+    return new Response(JSON.stringify(cancelledBooking), { status: 200 });
 
   } catch (error: any) {
-    if (error.message === 'Booking not found') {
-      return NextResponse.json({ error: error.message }, { status: 404 });
+    const message = error?.message || 'An error occurred';
+    
+    if (message === 'Booking not found') {
+      return new Response(JSON.stringify({ error: message }), { status: 404 });
     }
-    if (error.message === 'Forbidden') {
-      return NextResponse.json({ error: 'You are not authorized to cancel this booking.' }, { status: 403 });
+    if (message === 'Forbidden') {
+      return new Response(JSON.stringify({ error: 'You are not authorized to cancel this booking.' }), { status: 403 });
     }
-    if (error.message.includes('Authentication required')) {
-      return NextResponse.json({ error: error.message }, { status: 401 });
+    if (message.includes('Authentication required')) {
+      return new Response(JSON.stringify({ error: message }), { status: 401 });
     }
-    if (error.message.includes('Cancellation period has passed')) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    if (message.includes('Cancellation period has passed')) {
+      return new Response(JSON.stringify({ error: message }), { status: 400 });
     }
+
     console.error('Error cancelling booking:', error);
-    return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
+    return new Response(JSON.stringify({ error: 'An internal server error occurred' }), { status: 500 });
   }
 }
