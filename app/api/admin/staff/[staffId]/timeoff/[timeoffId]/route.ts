@@ -1,58 +1,58 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantScopedPrismaClient } from '@/lib/rls';
+import { withTenant } from '@/lib/prisma/tenant';
+import { getTenantIdFromRequest } from '@/lib/tenant';
 import { requireRole } from '@/lib/auth';
 import { z } from 'zod';
 
 const timeOffUpdateSchema = z.object({
-    start: z.string().datetime().optional(),
-    end: z.string().datetime().optional(),
+    startAt: z.string().datetime().optional(),
+    endAt: z.string().datetime().optional(),
     reason: z.string().optional(),
-}).refine(data => !data.start || !data.end || new Date(data.end) > new Date(data.start), {
+}).refine(data => !data.startAt || !data.endAt || new Date(data.endAt) > new Date(data.startAt), {
     message: 'End date must be after start date',
-    path: ['end'],
+    path: ['endAt'],
 });
 
-// PUT (update) a time off entry
 export async function PUT(req: NextRequest, { params }: { params: { timeoffId: string } }) {
     try {
-        const { tenant } = await requireRole(['owner', 'admin']);
-        const prisma = getTenantScopedPrismaClient(tenant.id);
+        const tenantId = getTenantIdFromRequest(req);
+        await requireRole(['owner', 'admin']);
 
         const body = await req.json();
         const validation = timeOffUpdateSchema.safeParse(body);
-
         if (!validation.success) {
-            return NextResponse.json({ error: 'Invalid request body', details: validation.error.flatten() }, { status: 400 });
+            return NextResponse.json({ error: 'Invalid request body', details: validation.error.flatten() }, { status: 422 });
         }
 
-        const { start, end, reason } = validation.data;
+        const { startAt, endAt, reason } = validation.data;
         const dataToUpdate: any = { reason };
-        if (start) dataToUpdate.start = new Date(start);
-        if (end) dataToUpdate.end = new Date(end);
+        if (startAt) dataToUpdate.startAt = new Date(startAt);
+        if (endAt) dataToUpdate.endAt = new Date(endAt);
 
-        const updatedTimeOff = await prisma.staffTimeOff.update({
-            where: { id: params.timeoffId },
-            data: dataToUpdate,
-        });
-
+        const updatedTimeOff = await withTenant(tenantId, (prisma) =>
+            prisma.staffTimeOff.update({
+                where: { id: params.timeoffId },
+                data: dataToUpdate,
+            })
+        );
         return NextResponse.json(updatedTimeOff);
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
     }
 }
 
-// DELETE a time off entry
 export async function DELETE(req: NextRequest, { params }: { params: { timeoffId: string } }) {
     try {
-        const { tenant } = await requireRole(['owner', 'admin']);
-        const prisma = getTenantScopedPrismaClient(tenant.id);
+        const tenantId = getTenantIdFromRequest(req);
+        await requireRole(['owner', 'admin']);
 
-        await prisma.staffTimeOff.delete({
-            where: { id: params.timeoffId },
-        });
-
+        await withTenant(tenantId, (prisma) =>
+            prisma.staffTimeOff.delete({
+                where: { id: params.timeoffId },
+            })
+        );
         return new NextResponse(null, { status: 204 });
     } catch (error: any) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
     }
 }

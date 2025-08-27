@@ -1,24 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantScopedPrismaClient } from '@/lib/rls';
+import { withTenant } from '@/lib/prisma/tenant';
+import { getTenantIdFromRequest } from '@/lib/tenant';
 import { requireRole } from '@/lib/auth';
 import { z } from 'zod';
 
 const serviceSchema = z.object({
   name: z.string().min(1, 'Name is required'),
-  duration: z.number().int().positive('Duration must be a positive integer'),
-  price: z.number().int().min(0, 'Price cannot be negative'),
+  durationMin: z.number().int().min(10, 'Duration must be at least 10 minutes'),
+  priceCents: z.number().int().min(0, 'Price cannot be negative'),
   active: z.boolean().default(true),
 });
 
 // GET all services for the tenant (admin)
 export async function GET(req: NextRequest) {
   try {
-    const { tenant } = await requireRole(['owner', 'admin']);
-    const prisma = getTenantScopedPrismaClient(tenant.id);
+    const tenantId = getTenantIdFromRequest(req);
+    await requireRole(['owner', 'admin']);
 
-    const services = await prisma.service.findMany({
-      orderBy: { name: 'asc' },
-    });
+    const services = await withTenant(tenantId, (prisma) =>
+      prisma.service.findMany({ orderBy: { name: 'asc' } })
+    );
 
     return NextResponse.json(services);
   } catch (error: any) {
@@ -33,22 +34,24 @@ export async function GET(req: NextRequest) {
 // POST a new service for the tenant (admin)
 export async function POST(req: NextRequest) {
   try {
-    const { tenant } = await requireRole(['owner', 'admin']);
-    const prisma = getTenantScopedPrismaClient(tenant.id);
+    const tenantId = getTenantIdFromRequest(req);
+    await requireRole(['owner', 'admin']);
 
     const body = await req.json();
     const validation = serviceSchema.safeParse(body);
 
     if (!validation.success) {
-      return NextResponse.json({ error: 'Invalid request body', details: validation.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid request body', details: validation.error.flatten() }, { status: 422 });
     }
 
-    const newService = await prisma.service.create({
-      data: {
-        ...validation.data,
-        tenantId: tenant.id,
-      },
-    });
+    const newService = await withTenant(tenantId, (prisma) =>
+      prisma.service.create({
+        data: {
+          ...validation.data,
+          tenantId: tenantId, // RLS check policy will also enforce this
+        },
+      })
+    );
 
     return NextResponse.json(newService, { status: 201 });
   } catch (error: any) {

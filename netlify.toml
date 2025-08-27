@@ -1,0 +1,14 @@
+# This file contains the build configuration for Netlify.
+
+[build]
+  # The Next.js plugin automatically sets the correct build command and publish directory.
+  # You do not need to set "command" or "publish" when using the plugin.
+
+[build.environment]
+  # Pin the Node.js version to 20, as requested.
+  # This avoids using Node 22, which caused issues in the initial deploy.
+  NODE_VERSION = "20"
+
+# The Essential Next.js plugin automatically configures your build and deployment on Netlify.
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

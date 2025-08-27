@@ -1,88 +1,87 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getTenantScopedPrismaClient } from '@/lib/rls';
+import { withTenant } from '@/lib/prisma/tenant';
+import { getTenantIdFromRequest } from '@/lib/tenant';
 import { z } from 'zod';
-import { parseISO, getDay, startOfDay, endOfDay, addMinutes, isWithinInterval, format } from 'date-fns';
+import { parse, getDay, addMinutes, isWithinInterval, format } from 'date-fns';
+import { zonedTimeToUtc, utcToZonedTime } from 'date-fns-tz';
 
 const availabilityQuerySchema = z.object({
-  serviceId: z.string().cuid(),
-  staffId: z.string().cuid(),
+  serviceId: z.string(),
+  staffId: z.string(),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be in YYYY-MM-DD format'),
 });
 
+const TIME_ZONE = 'Europe/Zurich';
+const SLOT_INCREMENT_MIN = 15; // Generate slots every 15 minutes
+
 export async function GET(req: NextRequest) {
   try {
-    const tenantId = req.headers.get('x-tenant-id');
-    if (!tenantId) {
-      return NextResponse.json({ error: 'Tenant ID is missing' }, { status: 400 });
-    }
-
+    const tenantId = getTenantIdFromRequest(req);
     const queryParams = Object.fromEntries(req.nextUrl.searchParams);
     const validation = availabilityQuerySchema.safeParse(queryParams);
 
     if (!validation.success) {
-      return NextResponse.json({ error: 'Invalid query parameters', details: validation.error.flatten() }, { status: 400 });
+      return NextResponse.json({ error: 'Invalid query parameters', details: validation.error.flatten() }, { status: 422 });
     }
 
     const { serviceId, staffId, date } = validation.data;
-    const targetDate = parseISO(date);
-    const weekday = getDay(targetDate); // 0 (Sun) - 6 (Sat)
 
-    const prisma = getTenantScopedPrismaClient(tenantId);
+    // Interpret the input date string (e.g., "2024-10-27") as being in the target timezone.
+    const targetDateAsZurich = zonedTimeToUtc(`${date}T00:00:00`, TIME_ZONE);
+    const weekday = getDay(targetDateAsZurich); // getDay works correctly with UTC dates
 
-    // 1. Fetch all necessary data in parallel
-    const [service, schedule, timeOffs, bookings] = await Promise.all([
-      prisma.service.findUnique({ where: { id: serviceId } }),
-      prisma.staffSchedule.findFirst({ where: { staffId, weekday } }),
-      prisma.staffTimeOff.findMany({ where: { staffId, start: { lte: endOfDay(targetDate) }, end: { gte: startOfDay(targetDate) } } }),
-      prisma.booking.findMany({ where: { staffId, start: { gte: startOfDay(targetDate), lte: endOfDay(targetDate) } } }),
-    ]);
+    const dayStartInUTC = zonedTimeToUtc(`${date}T00:00:00`, TIME_ZONE);
+    const dayEndInUTC = zonedTimeToUtc(`${date}T23:59:59`, TIME_ZONE);
 
-    if (!service) {
-      return NextResponse.json({ error: 'Service not found' }, { status: 404 });
-    }
-    if (!schedule) {
-      // Staff doesn't work on this day
-      return NextResponse.json([]);
-    }
+    const availableSlots = await withTenant(tenantId, async (prisma) => {
+      const [service, schedule, timeOffs, bookings] = await Promise.all([
+        prisma.service.findUnique({ where: { id: serviceId } }),
+        prisma.staffSchedule.findFirst({ where: { staffId, weekday } }),
+        prisma.staffTimeOff.findMany({ where: { staffId, startAt: { lte: dayEndInUTC }, endAt: { gte: dayStartInUTC } } }),
+        prisma.booking.findMany({ where: { staffId, startAt: { gte: dayStartInUTC, lte: dayEndInUTC }, status: 'CONFIRMED' } }),
+      ]);
 
-    // 2. Define the total availability for the day from the schedule
-    const dayStart = addMinutes(startOfDay(targetDate), schedule.startMin);
-    const dayEnd = addMinutes(startOfDay(targetDate), schedule.endMin);
+      if (!service) throw new Error('Service not found');
+      if (!schedule) return [];
 
-    // 3. Create a list of all "busy" intervals
-    const busyIntervals = [
-      ...bookings.map(b => ({ start: b.start, end: b.end })),
-      ...timeOffs.map(t => ({ start: t.start, end: t.end })),
-    ];
+      const scheduleStartUTC = addMinutes(dayStartInUTC, schedule.startMin);
+      const scheduleEndUTC = addMinutes(dayStartInUTC, schedule.endMin);
 
-    // 4. Generate potential slots and filter out the busy ones
-    const availableSlots: string[] = [];
-    let currentTime = dayStart;
+      const busyIntervals = [
+        ...bookings.map(b => ({ start: b.startAt, end: b.endAt })),
+        ...timeOffs.map(t => ({ start: t.startAt, end: t.endAt })),
+      ];
 
-    while (addMinutes(currentTime, service.duration) <= dayEnd) {
-      const slotEnd = addMinutes(currentTime, service.duration);
-      const slotInterval = { start: currentTime, end: slotEnd };
+      const slots: string[] = [];
+      let currentTimeUTC = scheduleStartUTC;
 
-      // Check if the slot overlaps with any busy interval
-      const isBusy = busyIntervals.some(busy =>
-        isWithinInterval(slotInterval.start, busy) ||
-        isWithinInterval(addMinutes(slotInterval.end, -1), busy) || // check just before the end
-        (slotInterval.start < busy.start && slotInterval.end > busy.end) // slot engulfs busy time
-      );
+      while (addMinutes(currentTimeUTC, service.durationMin) <= scheduleEndUTC) {
+        const slotEndUTC = addMinutes(currentTimeUTC, service.durationMin);
+        const slotInterval = { start: currentTimeUTC, end: slotEndUTC };
 
-      if (!isBusy) {
-        availableSlots.push(format(currentTime, 'HH:mm'));
+        const isBusy = busyIntervals.some(busy =>
+          isWithinInterval(slotInterval.start, busy) ||
+          isWithinInterval(addMinutes(slotInterval.end, -1), busy) ||
+          (slotInterval.start < busy.start && slotInterval.end > busy.end)
+        );
+
+        if (!isBusy) {
+          // Return the slot in the requested timezone's "HH:mm" format
+          const zonedTime = utcToZonedTime(currentTimeUTC, TIME_ZONE);
+          slots.push(format(zonedTime, 'HH:mm'));
+        }
+        currentTimeUTC = addMinutes(currentTimeUTC, SLOT_INCREMENT_MIN);
       }
-
-      // Move to the next potential slot time (e.g., every 15 minutes)
-      // A smaller step allows for more granular booking times.
-      currentTime = addMinutes(currentTime, 15);
-    }
+      return slots;
+    });
 
     return NextResponse.json(availableSlots);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching availability:', error);
+    if (error.message === 'Service not found') {
+        return NextResponse.json({ error: error.message }, { status: 404 });
+    }
     return NextResponse.json({ error: 'An internal server error occurred' }, { status: 500 });
   }
 }

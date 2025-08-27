@@ -13,8 +13,8 @@ model Tenant {
   domain    String   @unique
   plan      String   @default("basic")
   themeJson Json?
-  createdAt DateTime @default(now())
-  profiles  Profile[] // Changed from users User[]
+  createdAt DateTime @default(now()) @map("created_at")
+  profiles  Profile[]
   services  Service[]
   staff     Staff[]
   bookings  Booking[]
@@ -23,37 +23,41 @@ model Tenant {
   timeOffs  StaffTimeOff[]
 }
 
-// Renamed from User to Profile
 model Profile {
-  id        String   @id // This is the UUID from Supabase auth.users
+  id        String    @id
   email     String
-  role      String   // 'customer' | 'staff' | 'owner' | 'admin'
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  role      String
+  tenantId  String    @db.Uuid
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
   fullName  String?
   phone     String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now()) @map("created_at")
+  bookings  Booking[] @relation("CustomerBookings")
+  createdBookings Booking[] @relation("CreatedBy")
+  cancelledBookings Booking[] @relation("CancelledBy")
 
   @@unique([tenantId, email])
   @@index([tenantId, role])
+  @@map("profile")
 }
 
 model Service {
-  id        String   @id @default(cuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  name      String
-  duration  Int
-  price     Int
-  active    Boolean  @default(true)
-  bookings  Booking[]
+  id          String   @id @default(cuid())
+  tenantId    String   @db.Uuid
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  name        String
+  durationMin Int      // Duration in minutes
+  priceCents  Int      // Price in the smallest currency unit (e.g., cents)
+  active      Boolean  @default(true)
+  bookings    Booking[]
 
   @@unique([tenantId, name])
+  @@map("service")
 }
 
 model Staff {
   id        String          @id @default(cuid())
-  tenantId  String
+  tenantId  String          @db.Uuid
   tenant    Tenant          @relation(fields: [tenantId], references: [id])
   name      String
   active    Boolean         @default(true)
@@ -62,61 +66,70 @@ model Staff {
   bookings  Booking[]
 
   @@unique([tenantId, name])
+  @@map("staff")
 }
 
 model StaffSchedule {
   id        String   @id @default(cuid())
-  tenantId  String
+  tenantId  String   @db.Uuid
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   staffId   String
   staff     Staff    @relation(fields: [staffId], references: [id])
-  weekday   Int      // 0-6 (So-Sa)
-  startMin  Int      // Minuten ab 00:00
+  weekday   Int
+  startMin  Int
   endMin    Int
 
   @@unique([tenantId, staffId, weekday])
+  @@map("staff_schedule")
 }
 
 model StaffTimeOff {
   id        String   @id @default(cuid())
-  tenantId  String
+  tenantId  String   @db.Uuid
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   staffId   String
   staff     Staff    @relation(fields: [staffId], references: [id])
-  start     DateTime
-  end       DateTime
+  startAt   DateTime @map("start_at")
+  endAt     DateTime @map("end_at")
   reason    String?
+
+  @@map("staff_time_off")
 }
 
 model Booking {
-  id           String   @id @default(cuid())
-  tenantId     String
-  tenant       Tenant   @relation(fields: [tenantId], references: [id])
-  serviceId    String
-  service      Service  @relation(fields: [serviceId], references: [id])
-  staffId      String
-  staff        Staff    @relation(fields: [staffId], references: [id])
-  customerId   String? // This could link to a Profile with role 'customer'
-  start        DateTime
-  end          DateTime
-  status       String   // 'PENDING' | 'CONFIRMED' | 'CANCELLED'
-  customerName String
-  email        String?
-  phone        String?
-  createdAt    DateTime @default(now())
+  id                String   @id @default(cuid())
+  tenantId          String   @db.Uuid
+  tenant            Tenant   @relation(fields: [tenantId], references: [id])
+  serviceId         String
+  service           Service  @relation(fields: [serviceId], references: [id])
+  staffId           String
+  staff             Staff    @relation(fields: [staffId], references: [id])
+  customerId        String?
+  customer          Profile? @relation("CustomerBookings", fields: [customerId], references: [id])
+  startAt           DateTime @map("start_at")
+  endAt             DateTime @map("end_at")
+  status            String
+  customerName      String
+  email             String?
+  phone             String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  createdByUserId   String?
+  createdByUser     Profile? @relation("CreatedBy", fields: [createdByUserId], references: [id])
+  cancelledByUserId String?
+  cancelledByUser   Profile? @relation("CancelledBy", fields: [cancelledByUserId], references: [id])
 
-  @@index([tenantId, staffId, start])
-  @@index([start])
-  @@index([end])
+  @@index([tenantId, staffId, startAt])
+  @@map("booking")
 }
 
 model CustomerBan {
   id        String   @id @default(cuid())
-  tenantId  String
+  tenantId  String   @db.Uuid
   tenant    Tenant   @relation(fields: [tenantId], references: [id])
   email     String
   reason    String?
-  createdAt DateTime @default(now())
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([tenantId, email], name: "ban_by_tenant_email")
+  @@map("customer_ban")
 }

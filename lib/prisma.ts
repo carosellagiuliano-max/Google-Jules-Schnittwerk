@@ -12,9 +12,9 @@ declare global {
 // In production, we'll create a new instance.
 // In development, we'll check if an instance already exists on the global object.
 // If it does, we'll use that. Otherwise, we'll create a new one.
-export const db = global.prisma || new PrismaClient();
+export const prisma = global.prisma || new PrismaClient();
 
 // If we're in development, assign the prisma client to the global object.
 if (process.env.NODE_ENV !== 'production') {
-  global.prisma = db;
+  global.prisma = prisma;
 }

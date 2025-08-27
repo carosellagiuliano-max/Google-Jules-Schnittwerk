@@ -1,5 +1,5 @@
 import { headers } from 'next/headers';
-import { db } from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 
 export default async function Home() {
   const headersList = headers();
@@ -14,7 +14,7 @@ export default async function Home() {
     );
   }
 
-  const tenant = await db.tenant.findUnique({
+  const tenant = await prisma.tenant.findUnique({
     where: {
       id: tenantId,
     },

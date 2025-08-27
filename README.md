@@ -16,11 +16,42 @@ Each tenant gets their own subdomain and can manage their own resources in isola
 
 ## 1. Local Development Setup (Runbook)
 
-### 1.1. Prerequisites
+### 1.1. Option A: Quick Start with SQLite (Recommended)
+
+For fast, local development without needing Docker or a live database, you can use SQLite.
+
+1.  **Configure Prisma for SQLite:**
+    Open `prisma/schema.prisma` and change the `provider` to `sqlite`:
+    ```prisma
+    datasource db {
+      provider = "sqlite"
+      url      = env("DATABASE_URL")
+    }
+    ```
+
+2.  **Set Environment Variable for SQLite:**
+    In your `.env` file, set the `DATABASE_URL`:
+    ```
+    DATABASE_URL="file:./dev.db"
+    ```
+
+3.  **Create and Migrate the Database:**
+    This command will create the `dev.db` file and set up the schema.
+    ```bash
+    npx prisma migrate dev --name init-sqlite
+    ```
+
+Now you can run `npm run dev` and the application will use this local SQLite database.
+
+### 1.2. Option B: Full Setup with PostgreSQL
+
+This setup mirrors the production environment more closely.
+
+#### Prerequisites
 
 - [Node.js](https://nodejs.org/) (v20 or later)
 - [npm](https://www.npmjs.com/)
-- [Docker](https://www.docker.com/) (for running a local Postgres database)
+- [Docker](https://www.docker.com/)
 
 ### 1.2. Environment Variables
 
@@ -209,3 +240,30 @@ Common error codes:
 ## 7. Housekeeping
 
 All leftover code and configuration from the original "Lovable" Vite template have been removed. The project structure is now a standard Next.js application.
+
+---
+
+## 8. Testing
+
+The project is set up with Jest for backend testing. The test files are located in the `tests/` directory.
+
+### Running Tests
+
+1.  **Setup Test Environment:** The tests are configured to run against a separate SQLite database to avoid interfering with your development data. Before running the tests, ensure your `.env.test` file has the following line:
+    ```
+    DATABASE_URL="file:./test.db"
+    ```
+
+2.  **Prepare Test Database:**
+    To ensure tests run against a clean and consistent database, run the migration command with the test environment:
+    ```bash
+    npx prisma migrate deploy --schema=./prisma/schema.prisma
+    ```
+    *(Note: The test runner can be configured to do this automatically before each test run)*
+
+3.  **Execute Tests:**
+    Run the following command to execute all tests:
+    ```bash
+    npm test
+    ```
+    *(Note: a `test` script needs to be added to `package.json`: `"test": "jest"`)

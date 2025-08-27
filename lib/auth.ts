@@ -1,6 +1,6 @@
 import { headers } from 'next/headers';
 import { createClient as createServerSupabaseClient } from '@/lib/supabase/server';
-import { db } from '@/lib/prisma';
+import { prisma } from '@/lib/prisma';
 import { Tenant, Profile } from '@prisma/client';
 
 /**
@@ -16,7 +16,7 @@ export async function requireTenant(): Promise<Tenant> {
     throw new Error('Could not determine tenant.');
   }
 
-  const tenant = await db.tenant.findUnique({
+  const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
   });
 
@@ -41,7 +41,7 @@ export async function currentUser(): Promise<{ user: any; profile: Profile } | n
 
   const tenant = await requireTenant();
 
-  const profile = await db.profile.findUnique({
+  const profile = await prisma.profile.findUnique({
     where: {
       id: user.id,
       tenantId: tenant.id
