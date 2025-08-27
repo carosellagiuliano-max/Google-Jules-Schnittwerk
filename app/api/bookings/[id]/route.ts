@@ -1,12 +1,9 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getTenantScopedPrismaClient } from '@/lib/rls';
 import { requireRole } from '@/lib/auth';
 import { subHours, isBefore } from 'date-fns';
 
-export async function DELETE(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export const DELETE = async (req: Request, { params }: any) => {
   try {
     const tenantId = req.headers.get('x-tenant-id');
     if (!tenantId) {

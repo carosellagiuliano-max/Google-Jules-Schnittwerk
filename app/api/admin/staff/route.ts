@@ -11,8 +11,8 @@ const staffSchema = z.object({
 // GET all staff for the tenant (admin)
 export async function GET(req: NextRequest) {
   try {
-    const { tenant } = await requireRole(['owner', 'admin']);
-    const prisma = getTenantScopedPrismaClient(tenant.id);
+    const { profile } = await requireRole(['owner', 'admin']);
+    const prisma = getTenantScopedPrismaClient(profile.tenantId);
 
     const staff = await prisma.staff.findMany({
       orderBy: { name: 'asc' },
@@ -31,8 +31,8 @@ export async function GET(req: NextRequest) {
 // POST a new staff member for the tenant (admin)
 export async function POST(req: NextRequest) {
   try {
-    const { tenant } = await requireRole(['owner', 'admin']);
-    const prisma = getTenantScopedPrismaClient(tenant.id);
+    const { profile } = await requireRole(['owner', 'admin']);
+    const prisma = getTenantScopedPrismaClient(profile.tenantId);
 
     const body = await req.json();
     const validation = staffSchema.safeParse(body);
@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     const newStaff = await prisma.staff.create({
       data: {
         ...validation.data,
-        tenantId: tenant.id,
+        tenantId: profile.tenantId,
       },
     });
 

@@ -11,11 +11,16 @@ const settingsUpdateSchema = z.object({
 // GET tenant settings (admin)
 export async function GET(req: NextRequest) {
   try {
-    const { tenant } = await requireRole(['owner', 'admin']);
+    const { profile } = await requireRole(['owner', 'admin']);
+    const prisma = getTenantScopedPrismaClient(profile.tenantId);
 
-    // The tenant object from requireRole is already fetched.
-    // We can return it directly, but let's select specific fields
-    // to ensure we don't expose too much.
+    // We need to fetch the tenant object using the tenantId from the profile
+    const tenant = await prisma.tenant.findUnique({ where: { id: profile.tenantId } });
+
+    if (!tenant) {
+      return NextResponse.json({ error: 'Tenant not found' }, { status: 404 });
+    }
+
     const settings = {
         id: tenant.id,
         name: tenant.name,
@@ -38,8 +43,8 @@ export async function GET(req: NextRequest) {
 // PUT (update) tenant settings (admin)
 export async function PUT(req: NextRequest) {
     try {
-        const { tenant } = await requireRole(['owner', 'admin']);
-        const prisma = getTenantScopedPrismaClient(tenant.id);
+        const { profile } = await requireRole(['owner', 'admin']);
+        const prisma = getTenantScopedPrismaClient(profile.tenantId);
 
         const body = await req.json();
         const validation = settingsUpdateSchema.safeParse(body);
@@ -49,7 +54,7 @@ export async function PUT(req: NextRequest) {
         }
 
         const updatedTenant = await prisma.tenant.update({
-            where: { id: tenant.id },
+            where: { id: profile.tenantId },
             data: validation.data,
         });
 

@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getTenantScopedPrismaClient } from '@/lib/rls';
 import { requireRole } from '@/lib/auth';
 import { z } from 'zod';
@@ -11,10 +11,10 @@ const serviceUpdateSchema = z.object({
 });
 
 // GET a single service by ID
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export const GET = async (req: Request, { params }: any) => {
   try {
-    const { tenant } = await requireRole(['owner', 'admin']);
-    const prisma = getTenantScopedPrismaClient(tenant.id);
+    const { profile } = await requireRole(['owner', 'admin']);
+    const prisma = getTenantScopedPrismaClient(profile.tenantId);
 
     const service = await prisma.service.findUnique({ where: { id: params.id } });
 
@@ -30,10 +30,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 }
 
 // PUT (update) a service by ID
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export const PUT = async (req: Request, { params }: any) => {
     try {
-        const { tenant } = await requireRole(['owner', 'admin']);
-        const prisma = getTenantScopedPrismaClient(tenant.id);
+        const { profile } = await requireRole(['owner', 'admin']);
+        const prisma = getTenantScopedPrismaClient(profile.tenantId);
 
         const body = await req.json();
         const validation = serviceUpdateSchema.safeParse(body);
@@ -55,14 +55,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 }
 
 // DELETE a service by ID
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export const DELETE = async (req: Request, { params }: any) => {
     try {
-        const { tenant } = await requireRole(['owner', 'admin']);
-        const prisma = getTenantScopedPrismaClient(tenant.id);
+        const { profile } = await requireRole(['owner', 'admin']);
+        const prisma = getTenantScopedPrismaClient(profile.tenantId);
 
-        // Important: Deleting a service that has associated bookings will fail
-        // if there's a foreign key constraint. A soft delete (setting active=false)
-        // is generally safer. This is a hard delete as requested.
         await prisma.service.delete({ where: { id: params.id } });
 
         return new NextResponse(null, { status: 204 }); // No Content

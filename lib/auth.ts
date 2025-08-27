@@ -9,7 +9,7 @@ import { Tenant, Profile } from '@prisma/client';
  * @returns The current tenant object.
  */
 export async function requireTenant(): Promise<Tenant> {
-  const headersList = headers();
+  const headersList = await headers();
   const tenantId = headersList.get('x-tenant-id');
 
   if (!tenantId) {
@@ -32,19 +32,16 @@ export async function requireTenant(): Promise<Tenant> {
  * @returns An object containing the Supabase user and their application profile, or null if not authenticated.
  */
 export async function currentUser(): Promise<{ user: any; profile: Profile } | null> {
-  const supabase = createServerSupabaseClient();
+  const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) {
     return null;
   }
 
-  const tenant = await requireTenant();
-
-  const profile = await db.profile.findUnique({
+  const profile = await db.profile.findFirst({
     where: {
       id: user.id,
-      tenantId: tenant.id
     },
   });
 
@@ -59,13 +56,20 @@ export async function currentUser(): Promise<{ user: any; profile: Profile } | n
 
 type Role = 'customer' | 'staff' | 'owner' | 'admin';
 
+export type RequireRoleResult = {
+  user: any;
+  profile: Profile;
+  tenantId: string;
+};
+
+
 /**
  * A guard function that requires the user to be authenticated and have a specific role.
  * Throws an error if the user is not authenticated or does not have the required role.
  * @param requiredRole The role or roles the user must have.
  * @returns The authenticated user and their profile.
  */
-export async function requireRole(requiredRole: Role | Role[]): Promise<{ user: any; profile: Profile }> {
+export async function requireRole(requiredRole: Role | Role[]): Promise<RequireRoleResult> {
   const userContext = await currentUser();
 
   if (!userContext) {
@@ -79,5 +83,5 @@ export async function requireRole(requiredRole: Role | Role[]): Promise<{ user: 
     throw new Error(`Access denied. Required role: ${roles.join(' or ')}.`);
   }
 
-  return userContext;
+  return { ...userContext, tenantId: profile.tenantId };
 }

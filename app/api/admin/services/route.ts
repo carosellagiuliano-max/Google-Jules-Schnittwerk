@@ -13,8 +13,8 @@ const serviceSchema = z.object({
 // GET all services for the tenant (admin)
 export async function GET(req: NextRequest) {
   try {
-    const { tenant } = await requireRole(['owner', 'admin']);
-    const prisma = getTenantScopedPrismaClient(tenant.id);
+    const { profile } = await requireRole(['owner', 'admin']);
+    const prisma = getTenantScopedPrismaClient(profile.tenantId);
 
     const services = await prisma.service.findMany({
       orderBy: { name: 'asc' },
@@ -33,8 +33,8 @@ export async function GET(req: NextRequest) {
 // POST a new service for the tenant (admin)
 export async function POST(req: NextRequest) {
   try {
-    const { tenant } = await requireRole(['owner', 'admin']);
-    const prisma = getTenantScopedPrismaClient(tenant.id);
+    const { profile } = await requireRole(['owner', 'admin']);
+    const prisma = getTenantScopedPrismaClient(profile.tenantId);
 
     const body = await req.json();
     const validation = serviceSchema.safeParse(body);
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
     const newService = await prisma.service.create({
       data: {
         ...validation.data,
-        tenantId: tenant.id,
+        tenantId: profile.tenantId,
       },
     });
 

@@ -10,8 +10,8 @@ const unbanSchema = z.object({
 // DELETE to unban a customer
 export async function DELETE(req: NextRequest) {
   try {
-    const { tenant } = await requireRole(['owner', 'admin']);
-    const prisma = getTenantScopedPrismaClient(tenant.id);
+    const { profile } = await requireRole(['owner', 'admin']);
+    const prisma = getTenantScopedPrismaClient(profile.tenantId);
 
     const body = await req.json();
     const validation = unbanSchema.safeParse(body);
@@ -25,7 +25,7 @@ export async function DELETE(req: NextRequest) {
     await prisma.customerBan.delete({
       where: {
         ban_by_tenant_email: {
-          tenantId: tenant.id,
+          tenantId: profile.tenantId,
           email: email,
         },
       },

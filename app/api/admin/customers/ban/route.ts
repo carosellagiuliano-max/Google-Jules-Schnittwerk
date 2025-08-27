@@ -11,8 +11,8 @@ const banSchema = z.object({
 // POST to ban a customer
 export async function POST(req: NextRequest) {
   try {
-    const { tenant } = await requireRole(['owner', 'admin']);
-    const prisma = getTenantScopedPrismaClient(tenant.id);
+    const { profile } = await requireRole(['owner', 'admin']);
+    const prisma = getTenantScopedPrismaClient(profile.tenantId);
 
     const body = await req.json();
     const validation = banSchema.safeParse(body);
@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
 
     const newBan = await prisma.customerBan.create({
       data: {
-        tenantId: tenant.id,
+        tenantId: profile.tenantId,
         email,
         reason,
       },

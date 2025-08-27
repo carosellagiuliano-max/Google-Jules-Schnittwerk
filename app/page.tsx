@@ -2,7 +2,7 @@ import { headers } from 'next/headers';
 import { db } from '@/lib/prisma';
 
 export default async function Home() {
-  const headersList = headers();
+  const headersList = await headers();
   const tenantId = headersList.get('x-tenant-id');
 
   if (!tenantId) {

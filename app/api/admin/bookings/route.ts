@@ -13,8 +13,8 @@ const filterSchema = z.object({
 // GET all bookings for the tenant (admin) with filters
 export async function GET(req: NextRequest) {
   try {
-    const { tenant } = await requireRole(['owner', 'admin']);
-    const prisma = getTenantScopedPrismaClient(tenant.id);
+    const { profile } = await requireRole(['owner', 'admin']);
+    const prisma = getTenantScopedPrismaClient(profile.tenantId);
 
     const queryParams = Object.fromEntries(req.nextUrl.searchParams);
     const validation = filterSchema.safeParse(queryParams);
@@ -24,7 +24,7 @@ export async function GET(req: NextRequest) {
     }
 
     const { date, staffId, status } = validation.data;
-    const where: any = { tenantId: tenant.id };
+    const where: any = { tenantId: profile.tenantId };
 
     if (date) {
       const targetDate = parseISO(date);

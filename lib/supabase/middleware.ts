@@ -1,5 +1,5 @@
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { type NextRequest, type NextResponse } from 'next/server'
+import { type NextRequest, NextResponse } from 'next/server'
 
 export function createClient(request: NextRequest) {
   // Create an unmodified response

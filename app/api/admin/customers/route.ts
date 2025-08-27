@@ -10,8 +10,8 @@ const searchSchema = z.object({
 // GET all customers for the tenant (admin) with search
 export async function GET(req: NextRequest) {
   try {
-    const { tenant } = await requireRole(['owner', 'admin']);
-    const prisma = getTenantScopedPrismaClient(tenant.id);
+    const { profile } = await requireRole(['owner', 'admin']);
+    const prisma = getTenantScopedPrismaClient(profile.tenantId);
 
     const queryParams = Object.fromEntries(req.nextUrl.searchParams);
     const validation = searchSchema.safeParse(queryParams);
@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
 
     const { search } = validation.data;
     const where: any = {
-      tenantId: tenant.id,
+      tenantId: profile.tenantId,
       role: 'customer',
     };
 
